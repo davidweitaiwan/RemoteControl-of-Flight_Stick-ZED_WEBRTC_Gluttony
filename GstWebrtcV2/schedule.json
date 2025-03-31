@@ -1,0 +1,33 @@
+
+{
+    "client1": {
+        "platform": "window",
+        "send_offer": [
+            "client2", "client3"
+        ]
+    },
+    "zed_cam": {
+        "platform": "window",
+        "send_offer": [
+            "test1_recived"
+        ]
+    },
+    "test1_cam": {
+        "platform": "window",
+        "send_offer": [
+            "zed_recived","ubuntu_cam_recived"
+        ]
+    },
+    "test1_audio": {
+        "platform": "window",
+        "send_offer": [
+            "zed_audio_recived","ubuntu_audio_recived"
+        ]
+    },
+    "zed_audio": {
+        "platform": "window",
+        "send_offer": [
+            "test1_audio","ubuntu_audio_recived"
+        ]
+    }
+}
