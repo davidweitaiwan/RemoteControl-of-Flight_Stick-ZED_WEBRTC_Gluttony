@@ -117,7 +117,7 @@ find_peer_send_offer(const gchar* peer_id)
 static gint
 compare_str_glist(gconstpointer a, gconstpointer b)
 {
-    return g_strcmp0((char*)a, (char*)b);
+    return g_strcmp0((char *)a, (char*)b);
 }
 
 
@@ -223,7 +223,7 @@ on_incoming_decodebin_stream(GstElement* decodebin, GstPad* pad,
 
 
     if (g_str_has_prefix(name, "video")) {
-        handle_media_stream(pad, pipe, "videoconvert", "autovideosink");
+        handle_media_stream(pad, pipe, "nvvidconv", "autovideosink");
     }
     else if (g_str_has_prefix(name, "audio")) {
         handle_media_stream(pad, pipe, "audioconvert", "autoaudiosink");
@@ -243,6 +243,9 @@ on_incoming_stream(GstElement* webrtc, GstPad* pad, GstElement* pipe)
         return;
 
     decodebin = gst_element_factory_make("decodebin", NULL);
+    gst_print("Incoming stream: %s\n", GST_PAD_NAME(pad));
+    //print decodebin
+    gst_print("decodebin: %s\n", GST_ELEMENT_NAME(decodebin));
     g_signal_connect(decodebin, "pad-added",
         G_CALLBACK(on_incoming_decodebin_stream), pipe);
     gst_bin_add(GST_BIN(pipe), decodebin);
@@ -472,6 +475,8 @@ static void
 #define RTP_CAPS_OPUS(x) "application/x-rtp,media=audio,encoding-name=OPUS,payload=" STR(x)
 #define RTP_CAPS_VP8(x) "application/x-rtp,media=video,encoding-name=VP8,payload=" STR(x)
 #define RTP_CAPS_H264(x) "application/x-rtp,media=video,encoding-name=H264,payload=" STR(x)
+#define RTP_CAPS_H265(x) "application/x-rtp,media=video,encoding-name=H265,payload=" STR(x)
+
 static gboolean
 start_pipeline(void)
 {
@@ -496,13 +501,13 @@ start_pipeline(void)
     switch ((int)((long)share_mode)) {
     case 0:
         pipeline = gst_parse_launch("tee name=audiotee ! queue ! appsink  "
-            "videotestsrc is-live=true ! autovideoconvert !  video/x-raw,format=I420 ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay ! "
+            "videotestsrc is-live=true ! autovideoconvert ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay ! "
             "queue ! " RTP_CAPS_H264(96) " ! audiotee. ", &error);
         break;
     case 1:
         pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
             "ksvideosrc do-stats=TRUE ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
-            "queue ! "  RTP_CAPS_VP8(97)" ! audiotee. ", &error);
+            "queue ! " RTP_CAPS_VP8(97) " ! audiotee. ", &error);
         break;
     case 2:
         pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
@@ -511,15 +516,55 @@ start_pipeline(void)
         break;
     case 3:
         pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
-            "ksvideosrc do-stats=TRUE ! autovideoconvert ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay ! "
-            "queue ! " RTP_CAPS_H264(96) " ! audiotee. ", &error);
+            "v4l2src device=/dev/video4 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
+            "queue ! " RTP_CAPS_VP8(97) " ! audiotee. ", &error);
         break;
     case 4:
         pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
-            "zedsrc camera-fps=30  ! autovideoconvert ! video/x-raw,format=I420 ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay ! "
+            "ksvideosrc do-stats=TRUE ! autovideoconvert ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay ! "
             "queue ! " RTP_CAPS_H264(96) " ! audiotee. ", &error);
         break;
     case 5:
+        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
+            "zedsrc camera-id=0 camera-fps=30 camera-resolution=4 ! autovideoconvert ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay ! "
+            "queue ! " RTP_CAPS_H264(96) " ! audiotee. ", &error);
+        break;
+    case 6:
+        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
+            "zedsrc camera-id=1 camera-fps=30 camera-resolution=4 ! autovideoconvert ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay  "
+            "queue ! " RTP_CAPS_H264(96) " ! audiotee. ", &error);
+        break;
+    case 7:
+        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
+            "zedsrc camera-id=0 camera-fps=30  ! autovideoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
+            "queue ! " RTP_CAPS_VP8(97) " ! audiotee. ", &error);
+        break;
+    case 8:
+        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
+            "zedsrc camera-id=1 camera-fps=30  ! autovideoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
+            "queue ! " RTP_CAPS_VP8(97) " ! audiotee. ", &error);
+        break;
+    case 9:
+        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
+            "zedsrc camera-id=2 camera-fps=30 camera-resolution=4 ! autovideoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
+            "queue ! " RTP_CAPS_VP8(97) " ! audiotee. ", &error);
+        break;
+    case 10:
+        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
+            "zedsrc camera-id=3 camera-fps=30 camera-resolution=4 ! autovideoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
+            "queue ! " RTP_CAPS_VP8(97) " ! audiotee. ", &error);
+        break;
+    case 11:
+        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
+            "zedsrc camera-id=0 camera-fps=30 camera-resolution=4 ! autovideoconvert ! video/x-raw,format=I420 ! queue ! nvvidconv ! nvv4l2h264enc insert-sps-pps=true bitrate=16000000  ! rtph264pay  ! "
+            "queue ! " RTP_CAPS_H264(96) " ! audiotee. ", &error);
+        break;
+    case 12:
+        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
+            "zedsrc camera-id=1 camera-fps=30 camera-resolution=4 !  autovideoconvert ! video/x-raw,format=I420 ! queue ! nvvidconv ! nvv4l2h264enc insert-sps-pps=true bitrate=16000000  ! rtph264pay  ! "
+            "queue ! " RTP_CAPS_H264(96) " ! audiotee. ", &error);
+        break;
+    case 13:
         pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
             "autoaudiosrc ! audioconvert ! audioresample ! queue ! opusenc ! rtpopuspay ! "
             "queue ! " RTP_CAPS_OPUS(96) " ! audiotee. ", &error);
@@ -820,7 +865,7 @@ handle_sdp_answer(const gchar* peer_id, const gchar* text)
 
     answer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_ANSWER, sdp);
     g_assert_nonnull(answer);
-
+ 
     /* Set remote description on our pipeline */
     promise = gst_promise_new();
     webrtc = gst_bin_get_by_name(GST_BIN(pipeline), peer_id);
@@ -950,7 +995,7 @@ on_server_message(SoupWebsocketConnection* conn, SoupWebsocketDataType type,
             /* SDP and ICE, usually */
             if (g_str_has_prefix(text, "ROOM_PEER_MSG")) {
                 splitm = g_strsplit(text, " ", 3);
-                peer_id = (gchar*)find_peer_from_list(splitm[1]);
+                peer_id =  (gchar *)find_peer_from_list(splitm[1]);
                 g_assert_nonnull(peer_id);
                 /* Could be an offer or an answer, or ICE, or an arbitrary message */
                 handle_peer_message(peer_id, splitm[2]);
