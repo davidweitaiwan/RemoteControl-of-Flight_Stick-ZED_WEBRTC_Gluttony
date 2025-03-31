@@ -405,7 +405,7 @@ add_peer_to_pipeline(const gchar* peer_id, gboolean offer)
     g_free(tmp);
     webrtc = gst_element_factory_make("webrtcbin", peer_id);
     g_object_set(webrtc, "stun-server", "stun://rtc.o3o.tw", NULL);
-    g_object_set(webrtc, "turn-server", "turn://mirdc1:mirdc1@rtc.o3o.tw", NULL);
+    //g_object_set(webrtc, "turn-server", "turn://mirdc1:mirdc1@rtc.o3o.tw", NULL);
     gst_bin_add_many(GST_BIN(pipeline), q, webrtc, NULL);
 
     srcpad = gst_element_get_static_pad(q, "src");
@@ -501,8 +501,8 @@ start_pipeline(void)
         break;
     case 1:
         pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
-            "ksvideosrc do-stats=TRUE ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
-            "queue ! "  RTP_CAPS_VP8(97)" ! audiotee. ", &error);
+            "ksvideosrc do-stats=TRUE ! videoconvert ! queue ! video/x-raw,format=I420 ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay ! "
+            "queue ! " RTP_CAPS_H264(96)" ! audiotee. ", &error);
         break;
     case 2:
         pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
