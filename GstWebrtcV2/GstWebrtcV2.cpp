@@ -566,7 +566,7 @@ start_pipeline(void)
         break;
     case 13:
         pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
-            "autoaudiosrc ! audioconvert ! audioresample ! queue ! opusenc ! rtpopuspay ! "
+            " alsasrc device=plughw:CARD=MS,DEV=0 ! audioconvert ! audioresample ! queue ! opusenc ! rtpopuspay ! "
             "queue ! " RTP_CAPS_OPUS(96) " ! audiotee. ", &error);
         break;
     default:
@@ -724,12 +724,12 @@ do_join_room(const gchar* text)
         app_state = ROOM_CALL_OFFERING;
         for (ii = 1; ii < len; ii++) {
             gchar* peer_id = g_strdup(peer_ids[ii]);
-            if (g_list_find_custom(send_offer, peer_id, compare_str_glist)) {
+            //if (g_list_find_custom(send_offer, peer_id, compare_str_glist)) {
                 gst_print("ready send to  %s  offer!!!!!\n", peer_id);
                 // /* This might fail asynchronously */
                 call_peer(peer_id);
 
-            }
+            //}
             // gst_print ("Negotiating with peer %s\n", peer_id);
 
             // gst_print ("Negotiating with peer %s\n", peer_id);
@@ -885,6 +885,7 @@ handle_peer_message(const gchar* peer_id, const gchar* msg)
     JsonParser* parser = json_parser_new();
     if (!json_parser_load_from_data(parser, msg, -1, NULL)) {
         gst_printerr("Unknown message '%s' from '%s', ignoring", msg, peer_id);
+        handle_error_message(msg);
         g_object_unref(parser);
         return FALSE;
     }
@@ -893,6 +894,7 @@ handle_peer_message(const gchar* peer_id, const gchar* msg)
     if (!JSON_NODE_HOLDS_OBJECT(root)) {
         gst_printerr("Unknown json message '%s' from '%s', ignoring", msg,
             peer_id);
+        handle_error_message(msg);
         g_object_unref(parser);
         return FALSE;
     }
@@ -1007,14 +1009,14 @@ on_server_message(SoupWebsocketConnection* conn, SoupWebsocketDataType type,
                 g_assert_nonnull(peer_id);
                 gst_print("Peer %s has joined the room\n", peer_id);
                 gst_print("send_offer setting is %s .\n", peer_id);
-                if (g_list_find_custom(send_offer, peer_id, compare_str_glist)) {
+                //if (g_list_find_custom(send_offer, peer_id, compare_str_glist)) {
                     g_print("ready send to %s offer!!!!!\n", peer_id);
                     app_state = ROOM_CALL_OFFERING;
                     // /* This might fail asynchronously */
                     remove_peer_from_pipeline(peer_id);
 
                     call_peer(peer_id);
-                }
+                //}
 
                 // g_print ("update peers list: \n");
                 // display_list(peers);
