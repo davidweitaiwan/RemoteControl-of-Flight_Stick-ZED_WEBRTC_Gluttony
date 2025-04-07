@@ -358,102 +358,153 @@ on_negotiation_needed(GstElement* webrtc, const gchar* peer_id)
     g_signal_emit_by_name(webrtc, "create-offer", NULL, promise);
 }
 
+// Enable DataChannel for text/binary messages (optional)
+static void
+data_channel_on_open(GObject* dc, gpointer user_data)
+{
+    gst_print("DataChannel opened\n");
+}
+
+static void
+data_channel_on_message(GObject* dc, gchar* str_data, gpointer user_data)
+{
+    gst_print("DataChannel message: %s\n", str_data);
+}
+
+static void
+on_data_channel(GstElement* webrtc, GObject* data_channel, gpointer user_data)
+{
+    g_signal_connect(data_channel, "on-open", G_CALLBACK(data_channel_on_open), NULL);
+    g_signal_connect(data_channel, "on-message-string", G_CALLBACK(data_channel_on_message), NULL);
+}
+
+
+
 static void
 remove_peer_from_pipeline(const gchar* peer_id)
 {
-    gchar* qname;
-    GstPad* srcpad, * sinkpad;
-    GstElement* webrtc, * q, * tee;
+    gchar* name;
+    GstElement* webrtc, * vqueue, * aqueue;
+    GstPad* vsrcpad, * asrcpad;
+    GstElement* videotee, * audiotee;
 
+    // Remove webrtcbin
     webrtc = gst_bin_get_by_name(GST_BIN(pipeline), peer_id);
     if (!webrtc)
         return;
-
     gst_bin_remove(GST_BIN(pipeline), webrtc);
     gst_object_unref(webrtc);
 
-    qname = g_strdup_printf("queue-%s", peer_id);
-    q = gst_bin_get_by_name(GST_BIN(pipeline), qname);
-    g_free(qname);
+    // Remove video queue
+    name = g_strdup_printf("vqueue-%s", peer_id);
+    vqueue = gst_bin_get_by_name(GST_BIN(pipeline), name);
+    g_free(name);
+    if (vqueue) {
+        GstPad* sinkpad = gst_element_get_static_pad(vqueue, "sink");
+        vsrcpad = gst_pad_get_peer(sinkpad);
+        gst_object_unref(sinkpad);
 
-    sinkpad = gst_element_get_static_pad(q, "sink");
-    g_assert_nonnull(sinkpad);
-    srcpad = gst_pad_get_peer(sinkpad);
-    g_assert_nonnull(srcpad);
-    gst_object_unref(sinkpad);
+        videotee = gst_bin_get_by_name(GST_BIN(pipeline), "videotee");
+        if (videotee && vsrcpad) {
+            gst_element_release_request_pad(videotee, vsrcpad);
+            gst_object_unref(vsrcpad);
+            gst_object_unref(videotee);
+        }
 
-    gst_bin_remove(GST_BIN(pipeline), q);
-    gst_object_unref(q);
+        gst_bin_remove(GST_BIN(pipeline), vqueue);
+        gst_object_unref(vqueue);
+    }
 
-    tee = gst_bin_get_by_name(GST_BIN(pipeline), "audiotee");
-    g_assert_nonnull(tee);
-    gst_element_release_request_pad(tee, srcpad);
-    gst_object_unref(srcpad);
-    gst_object_unref(tee);
+    // Remove audio queue
+    name = g_strdup_printf("aqueue-%s", peer_id);
+    aqueue = gst_bin_get_by_name(GST_BIN(pipeline), name);
+    g_free(name);
+    if (aqueue) {
+        GstPad* sinkpad = gst_element_get_static_pad(aqueue, "sink");
+        asrcpad = gst_pad_get_peer(sinkpad);
+        gst_object_unref(sinkpad);
+
+        audiotee = gst_bin_get_by_name(GST_BIN(pipeline), "audiotee");
+        if (audiotee && asrcpad) {
+            gst_element_release_request_pad(audiotee, asrcpad);
+            gst_object_unref(asrcpad);
+            gst_object_unref(audiotee);
+        }
+
+        gst_bin_remove(GST_BIN(pipeline), aqueue);
+        gst_object_unref(aqueue);
+    }
 }
 
 static void
 add_peer_to_pipeline(const gchar* peer_id, gboolean offer)
 {
     int ret;
-    gchar* tmp;
-    GstElement* tee, * webrtc, * q;
-    GstPad* srcpad, * sinkpad;
+    gchar* name;
+    GstElement* webrtc, * vqueue, * aqueue;
+    GstPad* vsrcpad, * asrcpad, * vsinkpad, * asinkpad;
+    GstElement* videotee, * audiotee;
 
-    tmp = g_strdup_printf("queue-%s", peer_id);
-    q = gst_element_factory_make("queue", tmp);
-    g_free(tmp);
+    // Create per-peer queue + webrtcbin
+    name = g_strdup_printf("vqueue-%s", peer_id);
+    vqueue = gst_element_factory_make("queue", name);
+    g_free(name);
+
+    name = g_strdup_printf("aqueue-%s", peer_id);
+    aqueue = gst_element_factory_make("queue", name);
+    g_free(name);
+
     webrtc = gst_element_factory_make("webrtcbin", peer_id);
     g_object_set(webrtc, "stun-server", "stun://rtc.o3o.tw", NULL);
     g_object_set(webrtc, "turn-server", "turn://mirdc1:mirdc1@rtc.o3o.tw", NULL);
-    gst_bin_add_many(GST_BIN(pipeline), q, webrtc, NULL);
 
-    srcpad = gst_element_get_static_pad(q, "src");
-    g_assert_nonnull(srcpad);
-    sinkpad = gst_element_request_pad_simple(webrtc, "sink_%u");
-    g_assert_nonnull(sinkpad);
-    ret = gst_pad_link(srcpad, sinkpad);
-    g_assert_cmpint(ret, == , GST_PAD_LINK_OK);
-    gst_object_unref(srcpad);
-    gst_object_unref(sinkpad);
+    gst_bin_add_many(GST_BIN(pipeline), vqueue, aqueue, webrtc, NULL);
 
-    tee = gst_bin_get_by_name(GST_BIN(pipeline), "audiotee");
-    g_assert_nonnull(tee);
-    srcpad = gst_element_request_pad_simple(tee, "src_%u");
-    g_assert_nonnull(srcpad);
-    gst_object_unref(tee);
-    sinkpad = gst_element_get_static_pad(q, "sink");
-    g_assert_nonnull(sinkpad);
-    ret = gst_pad_link(srcpad, sinkpad);
-    g_assert_cmpint(ret, == , GST_PAD_LINK_OK);
-    gst_object_unref(srcpad);
-    gst_object_unref(sinkpad);
+    // Link video: videotee -> vqueue -> webrtcbin sink_%u
+    videotee = gst_bin_get_by_name(GST_BIN(pipeline), "videotee");
+    g_assert_nonnull(videotee);
+    vsrcpad = gst_element_request_pad_simple(videotee, "src_%u");
+    g_assert_nonnull(vsrcpad);
+    gst_object_unref(videotee);
+    vsinkpad = gst_element_get_static_pad(vqueue, "sink");
+    gst_pad_link(vsrcpad, vsinkpad);
+    gst_object_unref(vsrcpad);
+    gst_object_unref(vsinkpad);
 
-    /* This is the gstwebrtc entry point where we create the offer and so on. It
-     * will be called when the pipeline goes to PLAYING.
-     * XXX: We must connect this after webrtcbin has been linked to a source via
-     * get_request_pad() and before we go from NULL->READY otherwise webrtcbin
-     * will create an SDP offer with no media lines in it. */
+    GstPad* vsrclink = gst_element_get_static_pad(vqueue, "src");
+    GstPad* vsinklink = gst_element_request_pad_simple(webrtc, "sink_%u");
+    gst_pad_link(vsrclink, vsinklink);
+    gst_object_unref(vsrclink);
+    gst_object_unref(vsinklink);
 
+    // Link audio: audiotee -> aqueue -> webrtcbin sink_%u
+    audiotee = gst_bin_get_by_name(GST_BIN(pipeline), "audiotee");
+    g_assert_nonnull(audiotee);
+    asrcpad = gst_element_request_pad_simple(audiotee, "src_%u");
+    g_assert_nonnull(asrcpad);
+    gst_object_unref(audiotee);
+    asinkpad = gst_element_get_static_pad(aqueue, "sink");
+    gst_pad_link(asrcpad, asinkpad);
+    gst_object_unref(asrcpad);
+    gst_object_unref(asinkpad);
+
+    GstPad* asrclink = gst_element_get_static_pad(aqueue, "src");
+    GstPad* asinklink = gst_element_request_pad_simple(webrtc, "sink_%u");
+    gst_pad_link(asrclink, asinklink);
+    gst_object_unref(asrclink);
+    gst_object_unref(asinklink);
+
+    // Signal connections
     if (offer) {
-        gst_printerr("add_peer_to_pipeline! on-negotiation-needed. \n");
-        g_signal_connect(webrtc, "on-negotiation-needed",
-            G_CALLBACK(on_negotiation_needed), (gpointer)peer_id);
+        g_signal_connect(webrtc, "on-negotiation-needed", G_CALLBACK(on_negotiation_needed), (gpointer)peer_id);
     }
-    /* We need to transmit this ICE candidate to the browser via the websockets
-     * signalling server. Incoming ice candidates from the browser need to be
-     * added by us too, see on_server_message() */
-    g_signal_connect(webrtc, "on-ice-candidate",
-        G_CALLBACK(send_ice_candidate_message), (gpointer)peer_id);
-    /* Incoming streams will be exposed via this signal */
-    g_signal_connect(webrtc, "pad-added", G_CALLBACK(on_incoming_stream),
-        pipeline);
-
-    /* Set to pipeline branch to PLAYING */
-    ret = gst_element_sync_state_with_parent(q);
-    g_assert_true(ret);
-    ret = gst_element_sync_state_with_parent(webrtc);
-    g_assert_true(ret);
+    g_signal_connect(webrtc, "on-ice-candidate", G_CALLBACK(send_ice_candidate_message), (gpointer)peer_id);
+    g_signal_connect(webrtc, "pad-added", G_CALLBACK(on_incoming_stream), pipeline);
+    g_signal_connect(webrtc, "on-data-channel", G_CALLBACK(on_data_channel), NULL);
+    // Sync states
+    gst_element_sync_state_with_parent(vqueue);
+    gst_element_sync_state_with_parent(aqueue);
+    gst_element_sync_state_with_parent(webrtc);
 }
 
 static void
@@ -492,45 +543,18 @@ start_pipeline(void)
 
    */
 
-    printf("share_mode=%d\n", (int)((long)share_mode));
-    switch ((int)((long)share_mode)) {
-    case 0:
-        pipeline = gst_parse_launch("tee name=audiotee ! queue ! appsink  "
-            "videotestsrc is-live=true ! autovideoconvert !  video/x-raw,format=I420 ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay ! "
-            "queue ! " RTP_CAPS_H264(96) " ! audiotee. ", &error);
-        break;
-    case 1:
-        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
-            "ksvideosrc do-stats=TRUE ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
-            "queue ! "  RTP_CAPS_VP8(97)" ! audiotee. ", &error);
-        break;
-    case 2:
-        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
-            "v4l2src device=/dev/video0 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
-            "queue ! " RTP_CAPS_VP8(97) " ! audiotee. ", &error);
-        break;
-    case 3:
-        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
-            "ksvideosrc do-stats=TRUE ! autovideoconvert ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay ! "
-            "queue ! " RTP_CAPS_H264(96) " ! audiotee. ", &error);
-        break;
-    case 4:
-        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
-            "zedsrc camera-fps=30  ! autovideoconvert ! video/x-raw,format=I420 ! queue ! x264enc speed-preset=veryfast tune=zerolatency ! rtph264pay ! "
-            "queue ! " RTP_CAPS_H264(96) " ! audiotee. ", &error);
-        break;
-    case 5:
-        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
-            "autoaudiosrc ! audioconvert ! audioresample ! queue ! opusenc ! rtpopuspay ! "
-            "queue ! " RTP_CAPS_OPUS(96) " ! audiotee. ", &error);
-        break;
-    default:
-        pipeline = gst_parse_launch("tee name=audiotee ! queue ! fakesink "
-            "videotestsrc is-live=true ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
-            "queue ! " RTP_CAPS_VP8(97) " ! audiotee. ", &error);
-        break;
-    }
-
+    pipeline = gst_parse_launch(
+        "tee name=videotee ! queue ! fakesink "
+        "tee name=audiotee ! queue ! fakesink "
+        // Video stream to tee
+        "videotestsrc is-live=true pattern=ball ! videoconvert ! queue ! "
+        "vp8enc deadline=1 keyframe-max-dist=2000 ! "
+        "rtpvp8pay picture-id-mode=15-bit ! queue ! application/x-rtp,media=video,encoding-name=VP8,payload=96 ! videotee. "
+        // Audio stream to tee
+        "audiotestsrc is-live=true wave=red-noise ! audioconvert ! audioresample ! queue ! "
+        "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! audiotee.",
+        &error
+    );
 
 
     // if (share_mode == 0) {
@@ -679,12 +703,12 @@ do_join_room(const gchar* text)
         app_state = ROOM_CALL_OFFERING;
         for (ii = 1; ii < len; ii++) {
             gchar* peer_id = g_strdup(peer_ids[ii]);
-            if (g_list_find_custom(send_offer, peer_id, compare_str_glist)) {
+            //if (g_list_find_custom(send_offer, peer_id, compare_str_glist)) {
                 gst_print("ready send to  %s  offer!!!!!\n", peer_id);
                 // /* This might fail asynchronously */
                 call_peer(peer_id);
 
-            }
+            //}
             // gst_print ("Negotiating with peer %s\n", peer_id);
 
             // gst_print ("Negotiating with peer %s\n", peer_id);
@@ -962,14 +986,14 @@ on_server_message(SoupWebsocketConnection* conn, SoupWebsocketDataType type,
                 g_assert_nonnull(peer_id);
                 gst_print("Peer %s has joined the room\n", peer_id);
                 gst_print("send_offer setting is %s .\n", peer_id);
-                if (g_list_find_custom(send_offer, peer_id, compare_str_glist)) {
+                //if (g_list_find_custom(send_offer, peer_id, compare_str_glist)) {
                     g_print("ready send to %s offer!!!!!\n", peer_id);
                     app_state = ROOM_CALL_OFFERING;
                     // /* This might fail asynchronously */
                     remove_peer_from_pipeline(peer_id);
 
                     call_peer(peer_id);
-                }
+                //}
 
                 // g_print ("update peers list: \n");
                 // display_list(peers);
