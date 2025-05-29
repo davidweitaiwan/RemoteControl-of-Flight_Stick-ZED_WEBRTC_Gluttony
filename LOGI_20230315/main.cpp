@@ -32,7 +32,7 @@
 typedef long long LLONG;
 using namespace std::chrono_literals;
 
-#define SERVER_IP "61.220.23.240"
+#define SERVER_IP "61.220.23.239"
 #define SERVER_PORT "10000"
 
 #define DEVICE_NAME "LOGI_WHEEL"
@@ -1094,16 +1094,16 @@ int main(int argc, char** argv)
             switch (int(steeringButton))
             {
             case 14:
-                motionType = 0;
-                break;
-            case 15:
                 motionType = 1;
                 break;
-            case 16:
+            case 15:
                 motionType = 2;
                 break;
-            case 17:
+            case 16:
                 motionType = 3;
+                break;
+            case 17:
+                motionType = 4;
                 break;
             default:
                 break;
@@ -1112,9 +1112,9 @@ int main(int argc, char** argv)
             ImGui::SeparatorText("Steering");
             for (int i = 0; i < 4; i++)
             {
-                ImVec4 color = ImColor::HSV(motionColorHue[i], 0.8f, i == (int)motionType ? 0.8f : 0.2f);
+                //ImVec4 color = ImColor::HSV(motionColorHue[i], 0.8f, i == (int)motionType ? 0.8f : 0.2f);
                 MotionType = motionType;
-                //ImVec4 color = ImColor::HSV(motionColorHue[i], 0.8f, i == (int)logiWheel.getMotionType() - 1 ? 0.8f : 0.2f);
+                ImVec4 color = ImColor::HSV(motionColorHue[i], 0.8f, i == (int)motionType - 1 ? 0.8f : 0.2f);
 
                 ImGui::PushStyleColor(ImGuiCol_Button, color);
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
