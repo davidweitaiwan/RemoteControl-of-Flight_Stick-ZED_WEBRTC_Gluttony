@@ -32,7 +32,7 @@
 typedef long long LLONG;
 using namespace std::chrono_literals;
 
-#define SERVER_IP "61.220.23.239"
+#define SERVER_IP "61.220.23.240"
 #define SERVER_PORT "10000"
 
 #define DEVICE_NAME "LOGI_WHEEL"
@@ -790,23 +790,23 @@ int main(int argc, char** argv)
             IGameInputReading* reading;
             if (SUCCEEDED(input->GetCurrentReading(GameInputKindController, joysticks.devices[i], &reading)))
             {
-                ImGui::Text("Joystick = %d", i);
+                ImGui::Text("Joystick = %d Joystick productID = %x", i , joysticks.devices[i]->GetDeviceInfo()->productId);
                 reading->GetControllerAxisState(ARRAYSIZE(axes), axes);
                 reading->GetControllerSwitchState(ARRAYSIZE(switches), switches);
                 reading->GetControllerButtonState(ARRAYSIZE(buttons), buttons);
+                uint16_t joyid = joysticks.devices[i]->GetDeviceInfo()->productId;
 
                 for (uint32_t j = 0; j < reading->GetControllerAxisCount(); ++j) {
                     ImGui::Text("axes = %d ,vlaue = %f", j, axes[j]);
-                    if (reading->GetControllerAxisCount() == 2 && j == 0) {
-                        uint16_t test = joysticks.devices[i]->GetDeviceInfo()->productId; //1026
+
+                    if (joyid == 1026 && j == 0) {
                         axes_x = axes[j];
                     }
-                    if (reading->GetControllerAxisCount() == 5 && j == 2) {
-                        uint16_t test = joysticks.devices[i]->GetDeviceInfo()->productId; //1028
+                    if (joyid == 1028 && j == 2) {
 
                         axes_thr = axes[j];
                     }
-                    if (reading->GetControllerAxisCount() == 5 && j == 3) {
+                    if (joyid == 1028 && j == 3) {
                         axes_brk = axes[j];
                     }
 
@@ -818,11 +818,11 @@ int main(int argc, char** argv)
 
                 for (uint32_t z = 0; z < reading->GetControllerButtonCount(); ++z) {
                     if (buttons[z]) {
-                        if(reading->GetControllerAxisCount() == 2)
+                        if(joyid ==1026)
                         if (z == 14 || z == 15 || z == 16 || z == 17)
                             steeringButton = z;
-                        if(reading->GetControllerAxisCount() == 5)
-                        if (i == 0 && (z == 26 || z == 27 || z == 24))
+                        if(joyid == 1028)
+                        if (z == 26 || z == 27 || z == 24)
                             gearButton = z;
                     }
                 }
