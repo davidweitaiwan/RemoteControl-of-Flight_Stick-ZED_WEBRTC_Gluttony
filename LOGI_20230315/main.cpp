@@ -799,14 +799,14 @@ int main(int argc, char** argv)
                 for (uint32_t j = 0; j < reading->GetControllerAxisCount(); ++j) {
                     ImGui::Text("axes = %d ,vlaue = %f", j, axes[j]);
 
-                    if (joyid == 1026 && j == 0) {
+                    if ((joyid == 1026 || (reading->GetControllerAxisCount() ==2) ) && j == 0) {
                         axes_x = axes[j];
                     }
-                    if (joyid == 1028 && j == 2) {
+                    if ((joyid == 1028 || (reading->GetControllerAxisCount() == 5) )&& j == 2) {
 
                         axes_thr = axes[j];
                     }
-                    if (joyid == 1028 && j == 3) {
+                    if ((joyid == 1028 || (reading->GetControllerAxisCount() == 5)) && j == 3) {
                         axes_brk = axes[j];
                     }
 
@@ -818,10 +818,10 @@ int main(int argc, char** argv)
 
                 for (uint32_t z = 0; z < reading->GetControllerButtonCount(); ++z) {
                     if (buttons[z]) {
-                        if(joyid ==1026)
+                        if((joyid == 1026 || (reading->GetControllerAxisCount() == 2)))
                         if (z == 14 || z == 15 || z == 16 || z == 17)
                             steeringButton = z;
-                        if(joyid == 1028)
+                        if((joyid == 1028 || (reading->GetControllerAxisCount() == 5)))
                         if (z == 26 || z == 27 || z == 24)
                             gearButton = z;
                     }
